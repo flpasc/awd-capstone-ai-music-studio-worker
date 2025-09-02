@@ -56,7 +56,7 @@ export class S3Store {
     // Upload file
     async uploadFile(key: string, body: string | Buffer, options?: S3UploadOptions & { bucketName?: string }): Promise<void> {
         const bucket = options?.bucketName || this.defaultBucketName;
-        
+
         const command = new PutObjectCommand({
             Bucket: bucket,
             Key: key,
@@ -71,7 +71,7 @@ export class S3Store {
 
     async uploadFolder(sourceFolderPath: string, destinationFolderPath: string, bucketName?: string): Promise<void> {
         const bucket = bucketName || this.defaultBucketName;
-        
+
         try {
             // Check if source folder exists
             if (!fs.existsSync(sourceFolderPath)) {
@@ -80,25 +80,25 @@ export class S3Store {
 
             // Get all files recursively
             const files = this.getAllFiles(sourceFolderPath);
-            
+
             logger.trace(`Uploading ${files.length} files from ${sourceFolderPath} to ${destinationFolderPath} in bucket: ${bucket}`);
 
             // Upload each file
             for (const filePath of files) {
                 const relativePath = path.relative(sourceFolderPath, filePath);
                 const s3Key = path.posix.join(destinationFolderPath, relativePath).replace(/\\/g, '/');
-                
+
                 const fileContent = fs.readFileSync(filePath);
                 const contentType = this.getContentType(filePath);
-                
+
                 await this.uploadFile(s3Key, fileContent, {
                     contentType,
                     bucketName: bucket
                 });
-                
+
                 logger.trace(`Uploaded: ${relativePath} -> ${s3Key}`);
             }
-            
+
             logger.trace(`Folder upload completed: ${sourceFolderPath} -> ${destinationFolderPath}`);
         } catch (err) {
             logger.error(`Error uploading folder: ${sourceFolderPath}`, err);
@@ -124,17 +124,22 @@ export class S3Store {
     }
 
     // Upload buffer to S3
-    async uploadBuffer(fileKey: string, buffer: Buffer, contentType?: string, bucketName?: string): Promise<void> {
+    // return etag
+    async uploadBuffer(fileKey: string, buffer: Buffer, contentType?: string, bucketName?: string): Promise<string> {
         const bucket = bucketName || this.defaultBucketName;
 
         try {
-            await this.client.send(new PutObjectCommand({
+            const response = await this.client.send(new PutObjectCommand({
                 Bucket: bucket,
                 Key: fileKey,
                 Body: buffer,
                 ContentType: contentType || 'application/octet-stream'
             }));
             logger.trace(`Buffer uploaded successfully: ${fileKey} (${buffer.length} bytes)`);
+            if (!response.ETag) {
+                throw new Error("No ETag returned from S3");
+            }
+            return response.ETag;
         } catch (err) {
             logger.error(`Error uploading buffer: ${fileKey}`, err);
             throw new Error(`Failed to upload buffer: ${fileKey}`);
@@ -151,17 +156,17 @@ export class S3Store {
         }));
 
         if (!response?.Body) {
-            logger.error(`File not found: ${fileKey} in bucket: ${bucket}`);
-            throw new Error(`File not found: ${fileKey}`);
+            logger.error(`File not found: ${ fileKey } in bucket: ${ bucket } `);
+            throw new Error(`File not found: ${ fileKey } `);
         }
 
         try {
             const body = await this.streamToString(response.Body as Readable);
-            logger.trace(`File read: ${fileKey} from bucket: ${bucket}`);
+            logger.trace(`File read: ${ fileKey } from bucket: ${ bucket } `);
             return body;
         } catch (err) {
-            logger.error(`Error reading file: ${fileKey}`, err);
-            throw new Error(`Error reading file: ${fileKey}`);
+            logger.error(`Error reading file: ${ fileKey } `, err);
+            throw new Error(`Error reading file: ${ fileKey } `);
         }
     }
 

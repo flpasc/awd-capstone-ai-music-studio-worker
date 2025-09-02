@@ -12,3 +12,7 @@ dist/
 *.wav
 *.mp3
 *.mp4
+
+// local environment files
+*.local
+*.local.*

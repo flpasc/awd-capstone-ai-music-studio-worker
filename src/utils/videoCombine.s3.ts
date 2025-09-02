@@ -23,9 +23,9 @@ export type S3SlideShowOptions = {
  * Creates a slideshow from S3 files and uploads the result back to S3
  * @param s3Store - S3Store instance for file operations
  * @param options - SlideShow options with S3 file keys
- * @returns Promise that resolves when the slideshow is created and uploaded
+ * @returns Promise that resolves ETag when the slideshow is created and uploaded
  */
-export async function createS3SlideShow(s3Store: S3Store, options: S3SlideShowOptions): Promise<void> {
+export async function createS3SlideShow(s3Store: S3Store, options: S3SlideShowOptions): Promise<string> {
     const {
         imageFiles,
         imageTimings,
@@ -83,12 +83,13 @@ export async function createS3SlideShow(s3Store: S3Store, options: S3SlideShowOp
 
         // Upload result to S3
         const videoBuffer = fs.readFileSync(tempVideoPath);
-        await s3Store.uploadBuffer(outputVideoKey, videoBuffer, 'video/mp4', outputBucketName);
+        const etag = await s3Store.uploadBuffer(outputVideoKey, videoBuffer, 'video/mp4', outputBucketName);
 
         // Clean up temporary file
         fs.unlinkSync(tempVideoPath);
 
         console.log(`S3 slideshow created successfully and uploaded to: ${outputVideoKey}`);
+        return etag;
     } catch (error) {
         console.error('Error creating S3 slideshow:', error);
         throw error;
