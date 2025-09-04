@@ -1,0 +1,27 @@
+
+services:
+  video-worker:
+    env_file:
+      - .env.docker-compose
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # target: development
+    container_name: video-worker
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: ["node", "dist/main.js"]
+    ports:
+      - "3002:3002"
+    networks:
+      - backend-network
+    # depends_on:
+    #   - minio
+
+networks:
+  backend-network:
+    name: ai-studio-shared-network
+    external: true
+    driver: bridge
+    
