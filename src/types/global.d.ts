@@ -13,14 +13,20 @@ declare interface Task {
 }
 
 declare type createTaskResponseDto = {
-    taskId: string;
-    objectName: string;
+    id: string;
     progress: number;
     status: Omit<TaskStatus, 'error'>;
 } | {
-    taskId: string;
-    objectName: string;
+    id: string;
     progress: number;
     status: 'error';
     error: string
+};
+
+declare type checkTaskResponseDto = {
+    id: string;
+    progress: number;
+    status: TaskStatus;
+    error?: string;
+    etag?: string;
 };

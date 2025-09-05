@@ -1,5 +1,4 @@
 import path from "node:path";
-import { randomUUID } from "node:crypto";
 import dotenv from "dotenv";
 import express from "express";
 import { z } from 'zod';
@@ -79,7 +78,16 @@ function notifyTaskStatus(taskId: string) {
     }
 }
 
-app.post("/tasks", async (req: express.Request, res: express.Response) => {
+app.post("/tasks/:id", async (req: express.Request, res: express.Response) => {
+    const id = req.params.id;
+    const taskIdSchema = z.uuid();
+    const safeId = taskIdSchema.safeParse(id);
+    if (!safeId.success) {
+        return res.status(400).json({ error: "Invalid taskId format. Must be a valid UUID." });
+    }
+    if (tasks.has(id)) {
+        return res.status(409).json({ error: "Task with this ID already exists" });
+    }
 
     const videoRequestSchema = z.object({
         imageKeys: z.array(z.string()),
@@ -109,7 +117,6 @@ app.post("/tasks", async (req: express.Request, res: express.Response) => {
         return res.status(400).json({ error: z.treeifyError(safeRequestBody.error) });
     }
 
-    const taskId = randomUUID();
     const objectName = safeRequestBody.data.outputKey;
 
     const slideShowOptions: S3SlideShowOptions = {
@@ -125,22 +132,22 @@ app.post("/tasks", async (req: express.Request, res: express.Response) => {
     try {
         slideShowOptions.transitionDuration = 1;
         taskPromise = createS3SlideShow(s3Store, slideShowOptions);
-        const task = createTask(taskId, action, "processing", objectName, {
+        const task = createTask(id, action, "processing", objectName, {
             params: slideShowOptions
         });
         const response: createTaskResponseDto = {
-            taskId, objectName, status: task.status, progress: task.progress
-         };
-        res.setHeader("Location", `/tasks/${taskId}`);
+            id, status: task.status, progress: task.progress
+        };
+        res.setHeader("Location", `/tasks/${id}`);
         res.status(201).json(response);
     } catch (error) {
-        const task = createTask(taskId, action, "error", objectName, {
+        const task = createTask(id, action, "error", objectName, {
             params: slideShowOptions,
             error
         });
         console.error("Error creating S3 slideshow:", error);
         const response: createTaskResponseDto = {
-            taskId, objectName, status: task.status, progress: task.progress,
+            id, status: task.status, progress: task.progress,
             error: "Failed to create slideshow"
         };
         return res.status(500).json(response);
@@ -148,17 +155,32 @@ app.post("/tasks", async (req: express.Request, res: express.Response) => {
 
     try {
         const etag = await taskPromise;
-        updateTask(taskId, { status: "done", etag });
+        updateTask(id, { status: "done", etag });
     } catch (error) {
-        updateTask(taskId, { status: "error", error });
+        updateTask(id, { status: "error", error });
         console.error("Error creating S3 slideshow:", error);
     }
 });
 
-app.get("/tasks/:taskId", (req, res) => {
-    const task = tasks.get(req.params.taskId);
+app.get("/tasks/:id", (req, res) => {
+    const id = req.params.id;
+    if (!z.uuid().safeParse(id).success) {
+        return res.status(400).json({ error: "Invalid taskId format. Must be a valid UUID." });
+    }
+    const task = tasks.get(id);
     if (!task) return res.status(404).json({ error: "Task not found" });
-    res.json(task);
+    const response: checkTaskResponseDto = task.status === 'error' ? {
+        id: task.id,
+        progress: task.progress,
+        status: task.status,
+        error: task.error,
+    } : {
+        id: task.id,
+        progress: task.progress,
+        status: task.status,
+        etag: task.etag
+    };
+    res.json(response);
 });
 
 app.listen(config.PORT, () => console.log(`Server started on http://localhost:${config.PORT}`));
