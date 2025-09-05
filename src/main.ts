@@ -49,15 +49,19 @@ const s3Store = new S3Store({
 
 const tasks = new Map();
 
-function createTask(taskId: string, status: Task['status'], objectName: string, fields: Partial<Omit<Task, 'status' | 'createdAt' | 'updatedAt'>> = {}) {
-    tasks.set(taskId, { status, objectName, progress: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), ...fields });
+function createTask(taskId: string, action: string, status: Task['status'], objectName: string, fields: Partial<Omit<Task, 'status' | 'createdAt' | 'updatedAt'>> = {}): Task {
+    const task: Task = { status, action, objectName, progress: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), ...fields };
+    tasks.set(taskId, task);
     notifyTaskStatus(taskId);
+    return task;
 }
-function updateTask(taskId: string, fields: Partial<Omit<Task, 'createdAt' | 'updatedAt'>>) {
+function updateTask(taskId: string, fields: Partial<Omit<Task, 'createdAt' | 'updatedAt'>>): Task {
     const task = tasks.get(taskId);
     if (task) {
-        tasks.set(taskId, { ...task, ...fields, updatedAt: new Date().toISOString() });
+        const updatedTask = { ...task, ...fields, updatedAt: new Date().toISOString() };
+        tasks.set(taskId, updatedTask);
         notifyTaskStatus(taskId);
+        return updatedTask;
     } else {
         throw new Error(`Task with ID ${taskId} not found`);
     }
@@ -85,25 +89,25 @@ app.post("/tasks", async (req: express.Request, res: express.Response) => {
     } = req.body;
 
     const videoRequestSchema = z.object({
-        imageUrls: z.array(z.string()),
+        imageKeys: z.array(z.string()),
         imageTimings: z.array(z.number().min(1)),
-        audioUrls: z.array(z.string()),
+        audioKeys: z.array(z.string()),
         audioTimings: z.array(z.number().min(1)),
-        outputVideoKey: z.string().min(1).max(1024)
+        outputKey: z.string().min(1).max(1024)
     })
         .refine((data) => {
-            const parts = data.outputVideoKey.split('/')
+            const parts = data.outputKey.split('/')
             return parts.length >= 2 && parts[0].length > 0 && parts[0] !== '..'
         }, {
-            message: "outputVideoKey must not be in a root folder",
-            path: ["outputVideoKey"]
+            message: "outputKey must not be in a root folder",
+            path: ["outputKey"]
         })
-        .refine((data) => data.imageUrls.length === data.imageTimings.length, {
-            message: "imageUrls and imageTimings must have the same length",
+        .refine((data) => data.imageKeys.length === data.imageTimings.length, {
+            message: "imageKeys and imageTimings must have the same length",
             path: ["imageTimings"]
         })
-        .refine((data) => data.audioUrls.length === data.audioTimings.length, {
-            message: "audioUrls and audioTimings must have the same length",
+        .refine((data) => data.audioKeys.length === data.audioTimings.length, {
+            message: "audioKeys and audioTimings must have the same length",
             path: ["audioTimings"]
         });
 
@@ -116,23 +120,37 @@ app.post("/tasks", async (req: express.Request, res: express.Response) => {
     const objectName = outputVideoKey;
 
     const slideShowOptions: S3SlideShowOptions = {
-        imageFiles: imageUrls,
-        audioFiles: audioUrls,
-        imageTimings,
-        audioTimings,
+        imageKeys: validationResult.data.imageKeys,
+        audioKeys: validationResult.data.audioKeys,
+        imageTimings: validationResult.data.imageTimings,
+        audioTimings: validationResult.data.audioTimings,
         // transitionDuration: 1;
-        outputVideoKey
+        outputKey: validationResult.data.outputKey
     };
     let taskPromise;
+    const action = "createSlideshow";
     try {
+        slideShowOptions.transitionDuration = 1;
         taskPromise = createS3SlideShow(s3Store, slideShowOptions);
-        createTask(taskId, "processing", objectName);
+        const task = createTask(taskId, action, "processing", objectName, {
+            params: slideShowOptions
+        });
+        const response: createTaskResponseDto = {
+            taskId, objectName, status: task.status, progress: task.progress
+         };
         res.setHeader("Location", `/tasks/${taskId}`);
-        res.status(201).json({ taskId, objectName });
+        res.status(201).json(response);
     } catch (error) {
-        createTask(taskId, "error", objectName, { error });
+        const task = createTask(taskId, action, "error", objectName, {
+            params: slideShowOptions,
+            error
+        });
         console.error("Error creating S3 slideshow:", error);
-        return res.status(500).json({ error: "Failed to create slideshow" });
+        const response: createTaskResponseDto = {
+            taskId, objectName, status: task.status, progress: task.progress,
+            error: "Failed to create slideshow"
+        };
+        return res.status(500).json(response);
     }
 
     try {

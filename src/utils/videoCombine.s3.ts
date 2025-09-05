@@ -5,9 +5,9 @@ import * as path from 'path';
 import * as os from 'os';
 
 export type S3SlideShowOptions = {
-    imageFiles: string[];
+    imageKeys: string[];
     imageTimings: number[];
-    audioFiles: string[];
+    audioKeys: string[];
     audioTimings: number[];
     /** Transition duration in seconds; if undefined or zero, no transitions */
     transitionDuration?: number;
@@ -16,7 +16,7 @@ export type S3SlideShowOptions = {
     /** S3 bucket name to use for output video (optional, uses default bucket) */
     outputBucketName?: string;
     /** Output video key on S3 */
-    outputVideoKey: string;
+    outputKey: string;
 };
 
 /**
@@ -27,30 +27,27 @@ export type S3SlideShowOptions = {
  */
 export async function createS3SlideShow(s3Store: S3Store, options: S3SlideShowOptions): Promise<string> {
     const {
-        imageFiles,
+        imageKeys,
         imageTimings,
-        audioFiles,
+        audioKeys,
         audioTimings,
         transitionDuration,
         inputBucketName,
         outputBucketName,
-        outputVideoKey
+        outputKey
     } = options;
 
     // Validate input parameters
-    if (imageFiles.length !== imageTimings.length) {
-        throw new Error('Number of image files and image timings must match');
+    if (imageKeys.length !== imageTimings.length) {
+        throw new Error('Number of image keys and image timings must match');
     }
-    if (audioFiles.length !== audioTimings.length) {
-        throw new Error('Number of audio files and audio timings must match');
-    }
-    if (imageFiles.length !== audioFiles.length) {
-        throw new Error('Number of image files and audio files must match');
+    if (audioKeys.length !== audioTimings.length) {
+        throw new Error('Number of audio keys and audio timings must match');
     }
 
     try {
         // Create streams from S3 files
-        const imageStreams = await Promise.all(imageFiles.map(async (key) => {
+        const imageStreams = await Promise.all(imageKeys.map(async (key) => {
             const stream = await s3Store.getFileStream(key, inputBucketName);
             return {
                 stream,
@@ -58,7 +55,7 @@ export async function createS3SlideShow(s3Store: S3Store, options: S3SlideShowOp
             };
         }));
 
-        const audioStreams = await Promise.all(audioFiles.map(async (key) => {
+        const audioStreams = await Promise.all(audioKeys.map(async (key) => {
             const stream = await s3Store.getFileStream(key, inputBucketName);
             return {
                 stream,
@@ -83,12 +80,12 @@ export async function createS3SlideShow(s3Store: S3Store, options: S3SlideShowOp
 
         // Upload result to S3
         const videoBuffer = fs.readFileSync(tempVideoPath);
-        const etag = await s3Store.uploadBuffer(outputVideoKey, videoBuffer, 'video/mp4', outputBucketName);
+        const etag = await s3Store.uploadBuffer(outputKey, videoBuffer, 'video/mp4', outputBucketName);
 
         // Clean up temporary file
         fs.unlinkSync(tempVideoPath);
 
-        console.log(`S3 slideshow created successfully and uploaded to: ${outputVideoKey}`);
+        console.log(`S3 slideshow created successfully and uploaded to: ${outputKey}`);
         return etag;
     } catch (error) {
         console.error('Error creating S3 slideshow:', error);
