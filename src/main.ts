@@ -80,13 +80,6 @@ function notifyTaskStatus(taskId: string) {
 }
 
 app.post("/tasks", async (req: express.Request, res: express.Response) => {
-    const {
-        imageUrls,
-        imageTimings,
-        audioUrls,
-        audioTimings,
-        outputVideoKey,
-    } = req.body;
 
     const videoRequestSchema = z.object({
         imageKeys: z.array(z.string()),
@@ -111,21 +104,21 @@ app.post("/tasks", async (req: express.Request, res: express.Response) => {
             path: ["audioTimings"]
         });
 
-    const validationResult = videoRequestSchema.safeParse(req.body);
-    if (!validationResult.success) {
-        return res.status(400).json({ error: z.treeifyError(validationResult.error) });
+    const safeRequestBody = videoRequestSchema.safeParse(req.body);
+    if (!safeRequestBody.success) {
+        return res.status(400).json({ error: z.treeifyError(safeRequestBody.error) });
     }
 
     const taskId = randomUUID();
-    const objectName = outputVideoKey;
+    const objectName = safeRequestBody.data.outputKey;
 
     const slideShowOptions: S3SlideShowOptions = {
-        imageKeys: validationResult.data.imageKeys,
-        audioKeys: validationResult.data.audioKeys,
-        imageTimings: validationResult.data.imageTimings,
-        audioTimings: validationResult.data.audioTimings,
+        imageKeys: safeRequestBody.data.imageKeys,
+        audioKeys: safeRequestBody.data.audioKeys,
+        imageTimings: safeRequestBody.data.imageTimings,
+        audioTimings: safeRequestBody.data.audioTimings,
         // transitionDuration: 1;
-        outputKey: validationResult.data.outputKey
+        outputKey: safeRequestBody.data.outputKey
     };
     let taskPromise;
     const action = "createSlideshow";
