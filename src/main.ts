@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { S3Client } from "@aws-sdk/client-s3";
 import { S3Store } from "./utils/s3store";
 import { createS3SlideShow, S3SlideShowOptions } from "./utils/videoCombine.s3";
+import { BackendTaskDto } from "./integration/backend.types";
+import { mapTaskToBackendDto } from './integration/backend.helper';
 
 const env = process.env.NODE_ENV || "development";
 
@@ -46,32 +48,80 @@ const s3Store = new S3Store({
     bucketName: config.S3_BUCKET_NAME
 });
 
-const tasks = new Map();
+const tasks = new Map<string, AnyTask>();
 
-function createTask(taskId: string, action: string, status: Task['status'], objectName: string, fields: Partial<Omit<Task, 'status' | 'createdAt' | 'updatedAt'>> = {}): Task {
-    const task: Task = { status, action, objectName, progress: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), ...fields };
-    tasks.set(taskId, task);
-    notifyTaskStatus(taskId);
+function mapError(error: unknown): string | undefined {
+    if (error instanceof Error) {
+        return error.message;
+    } else if (typeof error === 'string') {
+        return error;
+    }
+    return undefined;
+}
+
+function createTask<T extends keyof TaskActions>(args: {
+    id: string;
+    action: T;
+    status: TaskStatus;
+    objectName: string;
+    params: TaskActions[T]['params'];
+    progress?: number;
+    result?: TaskActions[T]['result'];
+    error?: string | Error | unknown;
+}): Task<T> {
+    const task: Task<T> = {
+        id: args.id,
+        status: args.status,
+        action: args.action,
+        objectName: args.objectName,
+        progress: args.progress ?? 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        params: args.params,
+        ...(args.result !== undefined ? { result: args.result } : {}),
+        ...(args.error !== undefined ? { error: mapError(args.error) } : {}),
+    };
+    tasks.set(args.id, task as AnyTask);
+    notifyTaskStatus(args.id);
     return task;
 }
-function updateTask(taskId: string, fields: Partial<Omit<Task, 'createdAt' | 'updatedAt'>>): Task {
+
+function updateTask<T extends keyof TaskActions>(taskId: string, fields: {
+    status?: TaskStatus;
+    progress?: number;
+    error?: string | Error | unknown;
+    result?: TaskActions[T]['result'];
+}): Task<T>;
+function updateTask(taskId: string, fields: {
+    status?: TaskStatus;
+    progress?: number;
+    error?: string | Error | unknown;
+    result?: any;
+}): AnyTask {
     const task = tasks.get(taskId);
-    if (task) {
-        const updatedTask = { ...task, ...fields, updatedAt: new Date().toISOString() };
-        tasks.set(taskId, updatedTask);
-        notifyTaskStatus(taskId);
-        return updatedTask;
-    } else {
+    if (!task) {
         throw new Error(`Task with ID ${taskId} not found`);
     }
+    
+    const updated = { 
+        ...task, 
+        ...fields,
+        ...(fields.error !== undefined ? { error: mapError(fields.error) } : {}),
+        updatedAt: new Date().toISOString() 
+    } as AnyTask;
+    
+    tasks.set(taskId, updated);
+    notifyTaskStatus(taskId);
+    return updated;
 }
 
 function notifyTaskStatus(taskId: string) {
     const task = tasks.get(taskId);
     if (task && config.TASK_STATUS_WEBHOOK_URL) {
+        const response: BackendTaskDto = mapTaskToBackendDto(task);
         fetch(`${config.TASK_STATUS_WEBHOOK_URL}/${taskId}`, {
             method: 'POST',
-            body: JSON.stringify(task),
+            body: JSON.stringify(response),
         }).catch((error) => {
             console.error("Error notifying task status webhook:", error);
         });
@@ -128,11 +178,15 @@ app.post("/tasks/:id", async (req: express.Request, res: express.Response) => {
         outputKey: safeRequestBody.data.outputKey
     };
     let taskPromise;
-    const action = "createSlideshow";
+    const action: TaskAction = 'createSlideshow';
     try {
         slideShowOptions.transitionDuration = 1;
         taskPromise = createS3SlideShow(s3Store, slideShowOptions);
-        const task = createTask(id, action, "processing", objectName, {
+        const task = createTask({
+            id,
+            action: 'createSlideshow',
+            status: "processing",
+            objectName,
             params: slideShowOptions
         });
         const response: createTaskResponseDto = {
@@ -141,7 +195,11 @@ app.post("/tasks/:id", async (req: express.Request, res: express.Response) => {
         res.setHeader("Location", `/tasks/${id}`);
         res.status(201).json(response);
     } catch (error) {
-        const task = createTask(id, action, "error", objectName, {
+        const task = createTask({
+            id,
+            action: 'createSlideshow',
+            status: "error",
+            objectName,
             params: slideShowOptions,
             error
         });
@@ -155,9 +213,16 @@ app.post("/tasks/:id", async (req: express.Request, res: express.Response) => {
 
     try {
         const etag = await taskPromise;
-        updateTask(id, { status: "done", etag });
+        const result : TaskActions['createSlideshow']['result'] = {
+            videoKey: slideShowOptions.outputKey,
+            videoEtag: etag
+        };
+        updateTask<'createSlideshow'>(id, { status: "done", result });
     } catch (error) {
-        updateTask(id, { status: "error", error });
+        updateTask(id, {
+            status: "error",
+            error
+        });
         console.error("Error creating S3 slideshow:", error);
     }
 });
@@ -173,12 +238,12 @@ app.get("/tasks/:id", (req, res) => {
         id: task.id,
         progress: task.progress,
         status: task.status,
-        error: task.error,
+        error: task.error || 'Unknown error',
     } : {
         id: task.id,
         progress: task.progress,
         status: task.status,
-        etag: task.etag
+        result: task.result
     };
     res.json(response);
 });
