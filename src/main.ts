@@ -120,8 +120,17 @@ function notifyTaskStatus(taskId: string) {
     if (task && config.TASK_STATUS_WEBHOOK_URL) {
         const response: BackendTaskDto = mapTaskToBackendDto(task);
         fetch(`${config.TASK_STATUS_WEBHOOK_URL}/${taskId}`, {
-            method: 'POST',
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+            },
             body: JSON.stringify(response),
+        }).then((res) => {
+            if (!res.ok) {
+                console.error("Error notifying task status webhook:", res.statusText);
+            }else{
+                console.log("Successfully notified task status webhook for task:", taskId, task.status, response.status);
+            }
         }).catch((error) => {
             console.error("Error notifying task status webhook:", error);
         });
