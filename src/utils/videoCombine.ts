@@ -149,9 +149,9 @@ export function createSlideShowFromStreams(
     // allow overriding pixel format (e.g., 'yuv420p', 'yuv422p', etc.)
     const pixelFormat = ffmpegOptions.pixelFormat ?? 'yuv420p';
 
-    if (imageStreams.length !== imageTimings.length || 
-        audioStreams.length !== audioTimings.length || 
-        imageStreams.length !== audioStreams.length) {
+    if (imageStreams.length !== imageTimings.length ||
+        audioStreams.length !== audioTimings.length
+    ) {
         throw new Error('Number of image streams, audio streams, and timings must match');
     }
 
@@ -244,7 +244,7 @@ export function createSlideShowFromStreams(
 
         // Calculate total number of input streams needed
         const totalStreams = imageStreams.length + audioStreams.length;
-        
+
         // Create stdio array: stdin for each input stream + stdout + stderr
         const stdioConfig: Array<'pipe' | 'inherit'> = [];
         for (let i = 0; i < totalStreams; i++) {
@@ -262,7 +262,7 @@ export function createSlideShowFromStreams(
         // Track stream completion for proper synchronization
         let completedStreams = 0;
         const totalInputStreams = imageStreams.length + audioStreams.length;
-        
+
         const handleStreamComplete = () => {
             completedStreams++;
             if (completedStreams === totalInputStreams) {
@@ -275,15 +275,15 @@ export function createSlideShowFromStreams(
         imageStreams.forEach((imageStream, index) => {
             if (ffmpeg.stdio[index]) {
                 const targetPipe = ffmpeg.stdio[index] as NodeJS.WritableStream;
-                
+
                 console.log(`Connecting image stream ${index} (${imageStream.name}) to pipe ${index}`);
-                
+
                 // Handle stream errors before piping
                 imageStream.stream.on('error', (error) => {
                     console.error(`Image stream ${index} (${imageStream.name}) error:`, error);
                     reject(error);
                 });
-                
+
                 // Handle pipe errors but don't reject on ECONNRESET if FFmpeg is finishing
                 targetPipe.on('error', (error: NodeJS.ErrnoException) => {
                     if (error.code === 'ECONNRESET' || error.code === 'EPIPE') {
@@ -293,10 +293,10 @@ export function createSlideShowFromStreams(
                         reject(error);
                     }
                 });
-                
+
                 // Use default pipe behavior (end: true)
                 imageStream.stream.pipe(targetPipe);
-                
+
                 // Track stream completion
                 imageStream.stream.on('end', () => {
                     console.log(`Image stream ${index} (${imageStream.name}) ended`);
@@ -310,15 +310,15 @@ export function createSlideShowFromStreams(
             const pipeIndex = index + imageStreams.length;
             if (ffmpeg.stdio[pipeIndex]) {
                 const targetPipe = ffmpeg.stdio[pipeIndex] as NodeJS.WritableStream;
-                
+
                 console.log(`Connecting audio stream ${index} (${audioStream.name}) to pipe ${pipeIndex}`);
-                
+
                 // Handle stream errors before piping
                 audioStream.stream.on('error', (error) => {
                     console.error(`Audio stream ${index} (${audioStream.name}) error:`, error);
                     reject(error);
                 });
-                
+
                 // Handle pipe errors but don't reject on ECONNRESET if FFmpeg is finishing
                 targetPipe.on('error', (error: NodeJS.ErrnoException) => {
                     if (error.code === 'ECONNRESET' || error.code === 'EPIPE') {
@@ -328,10 +328,10 @@ export function createSlideShowFromStreams(
                         reject(error);
                     }
                 });
-                
+
                 // Use default pipe behavior (end: true)
                 audioStream.stream.pipe(targetPipe);
-                
+
                 // Track stream completion
                 audioStream.stream.on('end', () => {
                     console.log(`Audio stream ${index} (${audioStream.name}) ended`);
