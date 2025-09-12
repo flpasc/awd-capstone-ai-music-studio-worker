@@ -1,0 +1,17 @@
+{
+  "watch": [
+    "src"
+  ],
+  "ext": "ts,js",
+  "ignore": [
+    "dist",
+    "node_modules"
+  ],
+  "exec": "ts-node -P tsconfig.json --transpile-only src/main.ts",
+  "delay": "250ms",
+  "restartable": "rs",
+  "verbose": false,
+  "env": {
+    "NODE_ENV": "development"
+  }
+}

@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/main.js",
+    "dev": "nodemon --watch src --ext ts,js --exec 'ts-node --transpile-only src/main.ts'",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -26,6 +27,8 @@
   },
   "devDependencies": {
     "@types/express": "^5.0.3",
-    "@types/node": "^24.3.0"
+    "@types/node": "^24.3.0",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2"
   }
 }

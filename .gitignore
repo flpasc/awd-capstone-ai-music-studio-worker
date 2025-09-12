@@ -14,8 +14,8 @@ dist/
 *.mp4
 
 // environment files
-.env
-.env.docker-compose
+.env*
+!.env.example
 
 // local files
 *.local
