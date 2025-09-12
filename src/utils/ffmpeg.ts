@@ -15,27 +15,26 @@ import { spawn } from 'node:child_process';
  * controller.abort(); // Stops the child process
  */
 export function launchFfmpegProcess(args: string[], options = {}): Promise<void> {
+  const ffmpeg = spawn('ffmpeg', [...args], {
+    stdio: 'inherit',
+    ...options,
+  });
 
-    const ffmpeg = spawn('ffmpeg', [...args], {
-        stdio: 'inherit',
-        ...options
+  return new Promise((resolve, reject) => {
+    ffmpeg.stdout?.on('data', (data) => {
+      console.log(`stdout: ${data}`);
     });
 
-    return new Promise((resolve, reject) => {
-        ffmpeg.stdout?.on('data', (data) => {
-            console.log(`stdout: ${data}`);
-        });
-
-        ffmpeg.stderr?.on('data', (data) => {
-            console.error(`stderr: ${data}`);
-        });
-
-        ffmpeg.on('close', (code) => {
-            if (code === 0) {
-                resolve();
-            } else {
-                reject(new Error(`ffmpeg process exited with code ${code}`));
-            }
-        });
+    ffmpeg.stderr?.on('data', (data) => {
+      console.error(`stderr: ${data}`);
     });
+
+    ffmpeg.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`ffmpeg process exited with code ${code}`));
+      }
+    });
+  });
 }

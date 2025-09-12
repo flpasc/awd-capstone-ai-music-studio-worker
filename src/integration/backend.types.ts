@@ -1,4 +1,4 @@
-import z from "zod";
+import z from 'zod';
 // Define types for communication between worker and backend
 export enum BackendTaskKind {
   createSlideshow = 'create_slideshow',
@@ -39,6 +39,7 @@ const renderVideoTaskDtoSchema = backendBaseTaskDtoSchema.extend({
 });
 export type RenderVideoTaskDto = z.infer<typeof renderVideoTaskDtoSchema>;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const backendTaskDtoSchema = z.discriminatedUnion('kind', [
   createSlideshowTaskDtoSchema,
   renderVideoTaskDtoSchema,
