@@ -6,16 +6,20 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      # target: development
+      target: development
     container_name: video-worker
     working_dir: /app
     volumes:
       - .:/app
-    command: ["node", "dist/main.js"]
+      - worker_node_modules:/app/node_modules
+      - worker_dist:/app/dist
+    # command: ["node", "dist/main"]
     ports:
       - "3002:3002"
     networks:
       - backend-network
+    extra_hosts:
+      - "localhost:host-gateway"
     # depends_on:
     #   - minio
 
@@ -25,3 +29,6 @@ networks:
     external: true
     driver: bridge
     
+volumes:
+  worker_node_modules:
+  worker_dist:
