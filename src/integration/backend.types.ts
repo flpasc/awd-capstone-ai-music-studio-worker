@@ -1,5 +1,4 @@
 import z from "zod";
-
 // Define types for communication between worker and backend
 export enum BackendTaskKind {
   createSlideshow = 'create_slideshow',
@@ -32,13 +31,15 @@ const createSlideshowTaskDtoSchema = backendBaseTaskDtoSchema.extend({
   kind: z.literal(BackendTaskKind.createSlideshow),
   result: createSlideshowResultSchema.nullable(),
 });
+export type CreateSlideshowTaskDto = z.infer<typeof createSlideshowTaskDtoSchema>;
 
 const renderVideoTaskDtoSchema = backendBaseTaskDtoSchema.extend({
   kind: z.literal(BackendTaskKind.renderVideo),
   result: renderVideoResultSchema.nullable(),
 });
+export type RenderVideoTaskDto = z.infer<typeof renderVideoTaskDtoSchema>;
 
-export const backendTaskDtoSchema = z.discriminatedUnion('kind', [
+const backendTaskDtoSchema = z.discriminatedUnion('kind', [
   createSlideshowTaskDtoSchema,
   renderVideoTaskDtoSchema,
 ]);
