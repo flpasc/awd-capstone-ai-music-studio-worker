@@ -1,3 +1,4 @@
+import z from "zod";
 
 // Define types for communication between worker and backend
 export enum BackendTaskKind {
@@ -5,35 +6,40 @@ export enum BackendTaskKind {
   renderVideo = 'render_video',
   generatingAudio = 'generating_audio',
 }
-export type BackendTaskStatus = 'running' | 'error' | 'pending' | 'finished' | 'canceled';
+const backendTaskStatusSchema = z.enum(['running', 'error', 'pending', 'finished', 'canceled']);
+export type BackendTaskStatus = z.infer<typeof backendTaskStatusSchema>;
 
-export interface BackendCreateSlideshowResult {
-  videoKey: string;
-  videoEtag: string;
-}
+const createSlideshowResultSchema = z.object({
+  videoKey: z.string(),
+  videoEtag: z.string(),
+});
 
-export interface BackendRenderVideoResult {
-  videoKey: string;
-  duration: number;
-  fileSize: number;
-}
+const renderVideoResultSchema = z.object({
+  videoKey: z.string(),
+  duration: z.number(),
+  fileSize: z.number(),
+});
 
-interface BackendBaseTaskDto {
-  id: string;
-  kind: BackendTaskKind;
-  status: BackendTaskStatus;
-  progress: number;
-  error: string | null;
-}
+const backendBaseTaskDtoSchema = z.object({
+  id: z.string(),
+  kind: z.enum(BackendTaskKind),
+  status: backendTaskStatusSchema,
+  progress: z.number(),
+  error: z.string().nullable(),
+});
 
-declare type BackendCreateSlideshowTaskDto = BackendBaseTaskDto & {
-    kind: BackendTaskKind.createSlideshow;
-    result: BackendCreateSlideshowResult | null;
-};
+const createSlideshowTaskDtoSchema = backendBaseTaskDtoSchema.extend({
+  kind: z.literal(BackendTaskKind.createSlideshow),
+  result: createSlideshowResultSchema.nullable(),
+});
 
-declare type BackendRenderVideoTaskDto = BackendBaseTaskDto & {
-    kind: BackendTaskKind.renderVideo;
-    result: BackendRenderVideoResult | null;
-};
+const renderVideoTaskDtoSchema = backendBaseTaskDtoSchema.extend({
+  kind: z.literal(BackendTaskKind.renderVideo),
+  result: renderVideoResultSchema.nullable(),
+});
 
-export type BackendTaskDto = BackendCreateSlideshowTaskDto | BackendRenderVideoTaskDto;
+export const backendTaskDtoSchema = z.discriminatedUnion('kind', [
+  createSlideshowTaskDtoSchema,
+  renderVideoTaskDtoSchema,
+]);
+export type BackendTaskDto = z.infer<typeof backendTaskDtoSchema>;
