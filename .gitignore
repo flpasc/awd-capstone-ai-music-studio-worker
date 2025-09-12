@@ -13,6 +13,10 @@ dist/
 *.mp3
 *.mp4
 
-// local environment files
+// environment files
+.env
+.env.docker-compose
+
+// local files
 *.local
 *.local.*
