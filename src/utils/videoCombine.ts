@@ -46,10 +46,7 @@ export function createSlideShow(
   // allow overriding pixel format (e.g., 'yuv420p', 'yuv422p', etc.)
   const pixelFormat = ffmpegOptions.pixelFormat ?? 'yuv420p';
 
-  if (
-    imageFiles.length !== imageTimings.length ||
-    audioFiles.length !== audioTimings.length
-  ) {
+  if (imageFiles.length !== imageTimings.length || audioFiles.length !== audioTimings.length) {
     throw new Error('Number of image files, audio files, and timings must match');
   }
 

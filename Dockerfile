@@ -18,7 +18,7 @@ CMD ["npm", "run", "dev"]
 # Build stage
 FROM base AS builder
 ENV NODE_ENV=production
-RUN npm ci
+RUN npm ci --include=dev
 COPY . .
 RUN npm run build
 
@@ -34,8 +34,8 @@ RUN addgroup -g 1001 -S nodejs && \
 
 # Copy only necessary files
 COPY --from=builder --chown=worker:nodejs /app/dist ./dist
-COPY --from=builder --chown=worker:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=worker:nodejs /app/package.json ./package.json
+COPY --from=base --chown=worker:nodejs /app/node_modules ./node_modules
+COPY --from=base --chown=worker:nodejs /app/package.json ./package.json
 
 USER worker
 

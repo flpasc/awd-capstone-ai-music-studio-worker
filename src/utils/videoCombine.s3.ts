@@ -1,5 +1,10 @@
 import { S3Store } from './s3store';
-import { createSlideShow, createSlideShowFromStreams, SlideShowOptions, SlideShowStreamOptions } from './videoCombine';
+import {
+  createSlideShow,
+  createSlideShowFromStreams,
+  SlideShowOptions,
+  SlideShowStreamOptions,
+} from './videoCombine';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';

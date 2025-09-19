@@ -232,7 +232,11 @@ export class S3Store {
     }
   }
 
-  async downloadFileToPath(fileKey: string, bucketName?: string, localFilePath?: string): Promise<void> {
+  async downloadFileToPath(
+    fileKey: string,
+    bucketName?: string,
+    localFilePath?: string
+  ): Promise<void> {
     if (localFilePath === undefined) {
       const tempFileName = `download_${Date.now()}_${Math.random().toString(36).slice(2, 11)}_${path.basename(fileKey)}`;
       localFilePath = path.join(os.tmpdir(), tempFileName);
