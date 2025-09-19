@@ -27,6 +27,27 @@ export function createVideoFromImageAndAudio(
   launchFfmpegProcess(args, { signal });
 }
 
+function randomZoomPan(frameCount: number) {
+  const patterns = [
+    // Zoom in center
+    `z='zoom+0.001':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`,
+    // Zoom out center
+    `z='1.2-0.001*on':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`,
+    // Pan left to right
+    `z='zoom+0.001':x='(iw-(iw/zoom))*on/${frameCount}':y='ih/2-(ih/zoom/2)'`,
+    // Pan top to bottom
+    `z='zoom+0.001':x='iw/2-(iw/zoom/2)':y='(ih-(ih/zoom))*on/${frameCount}'`,
+    // Diagonal top-left to bottom-right
+    `z='zoom+0.001':x='(iw-(iw/zoom))*on/${frameCount}':y='(ih-(ih/zoom))*on/${frameCount}'`,
+    // Pan right to left
+    `z='zoom+0.001':x='(iw-(iw/zoom))*(1-on/${frameCount})':y='ih/2-(ih/zoom/2)'`,
+    // Pan bottom to top
+    `z='zoom+0.001':x='iw/2-(iw/zoom/2)':y='(ih-(ih/zoom))*(1-on/${frameCount})'`,
+  ];
+  const idx = Math.floor(Math.random() * patterns.length);
+  return patterns[idx];
+}
+
 // Create a slideshow from multiple images and audio files
 export type SlideShowOptions = {
   imageFiles: string[];
@@ -35,6 +56,7 @@ export type SlideShowOptions = {
   audioTimings: number[];
   /** Transition duration in seconds; if undefined or zero, no transitions */
   transitionDuration?: number;
+  zoompanFilterActive?: boolean;
 };
 
 export function createSlideShow(
@@ -64,8 +86,14 @@ export function createSlideShow(
 
   // Processing each image
   for (let i = 0; i < imageFiles.length; i++) {
+    const frameCount = Math.ceil(imageTimings[i] * 25); // 25 FPS
+    const zoompan = randomZoomPan(frameCount);
+    // const kenBurns = kenBurnsEffect(frameCount);
+
     filterParts.push(
-      `[${i}:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,trim=duration=${imageTimings[i]},setpts=PTS-STARTPTS[v${i}]`
+      `[${i}:v]scale=2560:1440:force_original_aspect_ratio=increase,` +
+        `zoompan=${zoompan}:d=${frameCount}:s=1280x720:fps=25,` +
+        `trim=duration=${imageTimings[i]},setpts=PTS-STARTPTS[v${i}]`
     );
     videoOutputs.push(`[v${i}]`);
   }
