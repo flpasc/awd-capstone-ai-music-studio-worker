@@ -48,8 +48,7 @@ export function createSlideShow(
 
   if (
     imageFiles.length !== imageTimings.length ||
-    audioFiles.length !== audioTimings.length ||
-    imageFiles.length !== audioFiles.length
+    audioFiles.length !== audioTimings.length
   ) {
     throw new Error('Number of image files, audio files, and timings must match');
   }

@@ -1,5 +1,5 @@
 import { S3Store } from './s3store';
-import { createSlideShowFromStreams, SlideShowStreamOptions } from './videoCombine';
+import { createSlideShow, createSlideShowFromStreams, SlideShowOptions, SlideShowStreamOptions } from './videoCombine';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -26,6 +26,91 @@ export type S3SlideShowOptions = {
  * @returns Promise that resolves ETag when the slideshow is created and uploaded
  */
 export async function createS3SlideShow(
+  s3Store: S3Store,
+  options: S3SlideShowOptions,
+  strategy: 'temporaryFiles' | 'streams' = 'temporaryFiles'
+): Promise<string> {
+  if (strategy === 'temporaryFiles') {
+    return createS3SlideShowWithTemporaryFiles(s3Store, options);
+  } else {
+    return createS3SlideShowWithSterams(s3Store, options);
+  }
+}
+
+export async function createS3SlideShowWithTemporaryFiles(
+  s3Store: S3Store,
+  options: S3SlideShowOptions
+): Promise<string> {
+  const {
+    imageKeys,
+    imageTimings,
+    audioKeys,
+    audioTimings,
+    transitionDuration,
+    inputBucketName,
+    outputBucketName,
+    outputKey,
+  } = options;
+
+  // Validate input parameters
+  if (imageKeys.length !== imageTimings.length) {
+    throw new Error('Number of image keys and image timings must match');
+  }
+  if (audioKeys.length !== audioTimings.length) {
+    throw new Error('Number of audio keys and audio timings must match');
+  }
+
+  try {
+    const tempDir = os.tmpdir();
+    const batchName = `${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+
+    // Create temporary files from S3 files
+    const imageTempPaths = await Promise.all(
+      imageKeys.map(async (key) => {
+        const tempImagePath = path.join(tempDir, `${batchName}_image_${path.basename(key)}`);
+        await s3Store.downloadFileToPath(key, inputBucketName, tempImagePath);
+        return tempImagePath;
+      })
+    );
+
+    const audioTempPaths = await Promise.all(
+      audioKeys.map(async (key) => {
+        const tempAudioPath = path.join(tempDir, `${batchName}_audio_${path.basename(key)}`);
+        await s3Store.downloadFileToPath(key, inputBucketName, tempAudioPath);
+        return tempAudioPath;
+      })
+    );
+
+    // Create temporary output file
+    const tempVideoPath = path.join(tempDir, `${batchName}_slideshow.mp4`);
+
+    const sildeshowOptions: SlideShowOptions = {
+      imageFiles: imageTempPaths,
+      imageTimings,
+      audioFiles: audioTempPaths,
+      audioTimings,
+      transitionDuration,
+    };
+
+    // Create slideshow from streams
+    await createSlideShow(sildeshowOptions, tempVideoPath);
+
+    // Upload result to S3
+    const videoBuffer = fs.readFileSync(tempVideoPath);
+    const etag = await s3Store.uploadBuffer(outputKey, videoBuffer, 'video/mp4', outputBucketName);
+
+    // Clean up temporary file
+    fs.unlinkSync(tempVideoPath);
+
+    console.log(`S3 slideshow created successfully and uploaded to: ${outputKey}`);
+    return etag;
+  } catch (error) {
+    console.error('Error creating S3 slideshow:', error);
+    throw error;
+  }
+}
+
+export async function createS3SlideShowWithSterams(
   s3Store: S3Store,
   options: S3SlideShowOptions
 ): Promise<string> {

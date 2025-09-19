@@ -9,6 +9,7 @@ import { Readable } from 'stream';
 import { createLogger } from './logger';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 
 const logger = createLogger('s3', 2);
 
@@ -197,6 +198,72 @@ export class S3Store {
     } catch (err) {
       logger.error(`Error reading file: ${fileKey} `, err);
       throw new Error(`Error reading file: ${fileKey} `);
+    }
+  }
+
+  // Download file
+  async downloadFileAsBuffer(fileKey: string, bucketName?: string): Promise<Buffer> {
+    const bucket = bucketName || this.defaultBucketName;
+
+    const response = await this.client.send(
+      new GetObjectCommand({
+        Bucket: bucket,
+        Key: fileKey,
+      })
+    );
+
+    if (!response?.Body) {
+      logger.error(`File not found: ${fileKey} in bucket: ${bucket}`);
+      throw new Error(`File not found: ${fileKey}`);
+    }
+
+    try {
+      const stream = response.Body as Readable;
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) {
+        chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+      }
+      const buffer = Buffer.concat(chunks);
+      logger.trace(`File downloaded: ${fileKey} from bucket: ${bucket} (${buffer.length} bytes)`);
+      return buffer;
+    } catch (err) {
+      logger.error(`Error downloading file: ${fileKey}`, err);
+      throw new Error(`Error downloading file: ${fileKey}`);
+    }
+  }
+
+  async downloadFileToPath(fileKey: string, bucketName?: string, localFilePath?: string): Promise<void> {
+    if (localFilePath === undefined) {
+      const tempFileName = `download_${Date.now()}_${Math.random().toString(36).slice(2, 11)}_${path.basename(fileKey)}`;
+      localFilePath = path.join(os.tmpdir(), tempFileName);
+    }
+
+    const bucket = bucketName || this.defaultBucketName;
+
+    const response = await this.client.send(
+      new GetObjectCommand({
+        Bucket: bucket,
+        Key: fileKey,
+      })
+    );
+
+    if (!response?.Body) {
+      logger.error(`File not found: ${fileKey} in bucket: ${bucket}`);
+      throw new Error(`File not found: ${fileKey}`);
+    }
+
+    try {
+      const stream = response.Body as Readable;
+      const writeStream = fs.createWriteStream(localFilePath);
+      stream.pipe(writeStream);
+      await new Promise((resolve, reject) => {
+        writeStream.on('finish', () => resolve(localFilePath));
+        writeStream.on('error', reject);
+      });
+      logger.trace(`File downloaded: ${fileKey} from bucket: ${bucket} to path: ${localFilePath}`);
+    } catch (err) {
+      logger.error(`Error downloading file: ${fileKey}`, err);
+      throw new Error(`Error downloading file: ${fileKey}`);
     }
   }
 

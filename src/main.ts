@@ -22,7 +22,7 @@ app.use(express.json());
 
 const envSchema = z.object({
   S3_REGION: z.string().min(1, 'S3_REGION is required'),
-  S3_ENDPOINT_URL: z.url('S3_ENDPOINT_URL must be a valid URL'),
+  S3_ENDPOINT: z.string().min(1, 'S3_ENDPOINT is required'),
   S3_ACCESS_KEY_ID: z.string().min(1, 'S3_ACCESS_KEY_ID is required'),
   S3_SECRET_ACCESS_KEY: z.string().min(1, 'S3_SECRET_ACCESS_KEY is required'),
   S3_FORCE_PATH_STYLE: z.string().optional().default('true'),
@@ -32,14 +32,14 @@ const envSchema = z.object({
     .optional()
     .default('3000')
     .transform((val) => parseInt(val, 10)),
-  TASK_STATUS_WEBHOOK_URL: z.url().optional(),
+  BACKEND_URL: z.url().optional(),
 });
 
 export const config = envSchema.parse(process.env);
 
 const s3 = new S3Client({
   region: config.S3_REGION,
-  endpoint: config.S3_ENDPOINT_URL,
+  endpoint: config.S3_ENDPOINT,
   forcePathStyle: config.S3_FORCE_PATH_STYLE === 'true',
   credentials: {
     accessKeyId: config.S3_ACCESS_KEY_ID,
@@ -120,9 +120,9 @@ function updateTask<T extends keyof TaskActions>(
 
 function notifyTaskStatus(taskId: string) {
   const task = tasks.get(taskId);
-  if (task && config.TASK_STATUS_WEBHOOK_URL) {
+  if (task && config.BACKEND_URL) {
     const response: BackendTaskDto = mapTaskToBackendDto(task);
-    fetch(`${config.TASK_STATUS_WEBHOOK_URL}/${taskId}`, {
+    fetch(`${config.BACKEND_URL}/tasks/${taskId}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
